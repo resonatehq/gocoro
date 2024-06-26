@@ -26,7 +26,7 @@ return func(c *gocoro.Coroutine[func() (string, error), string, string]) (string
   bar, _ := gocoro.Await(c, c)
 
   return foo + bar, nil
-})
+}
 ```
 
 See the [example](example/main.go) for complete usage details.
