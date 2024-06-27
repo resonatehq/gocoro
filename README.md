@@ -2,8 +2,6 @@
 
 A coroutine library for go that supports async await semantics.
 
-**Note**: this library uses experimental rangefunc and must be run with `GOEXPERIMENT=rangefunc`.
-
 ## Usage
 
 ```go

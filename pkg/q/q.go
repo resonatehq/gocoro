@@ -1,7 +1,5 @@
 package q
 
-import "iter"
-
 // Queue[T] is a generic FIFO queue implementation
 type Queue[T any] []T
 
@@ -19,14 +17,4 @@ func (q *Queue[T]) Dequeue() (T, bool) {
 	item := (*q)[0]
 	*q = (*q)[1:]
 	return item, true
-}
-
-func (q *Queue[T]) Pop() iter.Seq[T] {
-	return func(yield func(T) bool) {
-		for {
-			if item, ok := q.Dequeue(); !ok || !yield(item) {
-				return
-			}
-		}
-	}
 }

@@ -120,7 +120,12 @@ func (s *Scheduler[I, O]) Tick(cqes []*io.CQE[O]) []*io.SQE[I, O] {
 	s.unblock()
 
 	// coroutines
-	for coroutine := range s.runnable.Pop() {
+	for {
+		coroutine, ok := s.runnable.Dequeue()
+		if !ok {
+			break
+		}
+
 		value, spawn, await, done := coroutine.resume()
 
 		if value != nil {
