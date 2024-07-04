@@ -12,11 +12,12 @@ func TestQueue(t *testing.T) {
 	q.Enqueue(2)
 	q.Enqueue(3)
 
-	qe, _ := q.Dequeue()
-	assert.Equal(t, qe, 1, "Value should be 1")
-	expected := 2
-	for qe := range q.Pop() {
-		assert.Equal(t, qe, expected, "expected %d, got %d", expected, qe)
-		expected++
-	}
+	qe1, _ := q.Dequeue()
+	assert.Equal(t, qe1, 1, "Value should be 1")
+
+	qe2, _ := q.Dequeue()
+	assert.Equal(t, qe2, 2, "Value should be 2")
+
+	qe3, _ := q.Dequeue()
+	assert.Equal(t, qe3, 3, "Value should be 3")
 }

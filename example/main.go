@@ -8,7 +8,7 @@ import (
 )
 
 func coroutine(n int) gocoro.CoroutineFunc[func() (string, error), string, string] {
-	return func(c *gocoro.Coroutine[func() (string, error), string, string]) (string, error) {
+	return func(c gocoro.Coroutine[func() (string, error), string, string]) (string, error) {
 		fmt.Println("coroutine:", n)
 
 		if n == 0 {
