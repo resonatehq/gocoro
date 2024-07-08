@@ -13,15 +13,6 @@ import (
 // Scheduler
 /////////////////////////////////////////////////////////////////////
 
-type Scheduler[I, O any] interface {
-	Add(Coroutine[I, O])
-
-	Run()
-	RunUntilComplete()
-	RunUntilBlocked()
-	Shutdown()
-}
-
 type Coroutine[I, O any] interface {
 	Resume() (I, Promise[O], Coroutine[I, O], Completable, bool)
 	SetTime(int64)
@@ -94,6 +85,16 @@ func (s *scheduler[I, O]) RunUntilBlocked() {
 
 func (s *scheduler[I, O]) Shutdown() {
 	close(s.done)
+}
+
+func (s *scheduler[I, O]) Done() bool {
+	// TODO: implement a graceful shutdown
+	select {
+	case <-s.done:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *scheduler[I, O]) run(breakOnComplete bool) {

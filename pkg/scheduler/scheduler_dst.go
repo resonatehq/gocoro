@@ -11,6 +11,7 @@ import (
 
 type dstScheduler[I, O any] struct {
 	batchSize int
+	done      bool
 
 	io io.IO[I, O]
 	in []Coroutine[I, O]
@@ -45,7 +46,13 @@ func (s *dstScheduler[I, O]) RunUntilBlocked() {
 	panic("not implemented in dst")
 }
 
-func (s *dstScheduler[I, O]) Shutdown() {}
+func (s *dstScheduler[I, O]) Shutdown() {
+	s.done = true
+}
+
+func (s *dstScheduler[I, O]) Done() bool {
+	return s.done
+}
 
 func (s *dstScheduler[I, O]) Tick(time int64) {
 	// exhaust in
