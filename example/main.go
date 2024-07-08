@@ -41,7 +41,7 @@ func main() {
 	go io.Worker()
 
 	// instantiate scheduler
-	scheduler := gocoro.New(io, 100)
+	scheduler := gocoro.New(io, 100, 100)
 
 	// add coroutine to scheduler
 	promise := gocoro.Add(scheduler, coroutine(3))

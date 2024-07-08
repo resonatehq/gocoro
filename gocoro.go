@@ -12,8 +12,12 @@ import (
 
 // TODO: add comment about generic type stuff
 
-func New[I, O any](io io.IO[I, O], size int) scheduler.Scheduler[I, O] {
-	return scheduler.New(io, size)
+func New[I, O any](io io.IO[I, O], size int, batchSize int) scheduler.Scheduler[I, O] {
+	return scheduler.New(io, size, batchSize)
+}
+
+func NewDST[I, O any](io io.IO[I, O], batchSize int) scheduler.Scheduler[I, O] {
+	return scheduler.NewDST(io, batchSize)
 }
 
 func Add[T, TNext, TReturn any](s scheduler.Scheduler[T, TNext], f CoroutineFunc[T, TNext, TReturn]) promise.Promise[TReturn] {

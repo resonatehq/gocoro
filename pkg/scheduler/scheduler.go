@@ -40,6 +40,8 @@ type Completable interface {
 type scheduler[I, O any] struct {
 	lock sync.Mutex
 
+	batchSize int
+
 	io io.IO[I, O]
 	in chan Coroutine[I, O]
 
@@ -51,11 +53,12 @@ type scheduler[I, O any] struct {
 	// add the history
 }
 
-func New[I, O any](io io.IO[I, O], size int) *scheduler[I, O] {
+func New[I, O any](io io.IO[I, O], size int, batchSize int) *scheduler[I, O] {
 	return &scheduler[I, O]{
-		io:   io,
-		in:   make(chan Coroutine[I, O], size),
-		done: make(chan interface{}),
+		io:        io,
+		in:        make(chan Coroutine[I, O], size),
+		done:      make(chan interface{}),
+		batchSize: batchSize,
 	}
 }
 
@@ -125,12 +128,12 @@ func (s *scheduler[I, O]) runUntilBlocked(time int64, crt Coroutine[I, O], cqe *
 	}
 
 	// exhaust in
-	batch(s.in, 10, func(crt Coroutine[I, O]) {
+	batch(s.in, s.batchSize, func(crt Coroutine[I, O]) {
 		s.runnable.Enqueue(crt)
 	})
 
 	// exhaust cq
-	batch(s.io.Dequeue(), 10, func(cqe *io.CQE[O]) {
+	batch(s.io.Dequeue(), s.batchSize, func(cqe *io.CQE[O]) {
 		assert(cqe.Callback != nil, "callback should not be nil")
 		cqe.Callback(cqe.Value, cqe.Error)
 	})
