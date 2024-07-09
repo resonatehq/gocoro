@@ -65,6 +65,14 @@ func Await[T, TNext, TReturn, P any](c Coroutine[T, TNext, TReturn], p promise.A
 	return p.Value(), p.Error()
 }
 
+func YieldAndAwait[T, TNext, TReturn any](c Coroutine[T, TNext, TReturn], v T) (TNext, error) {
+	return Await(c, Yield(c, v))
+}
+
+func SpawnAndAwait[T, TNext, TReturn, R any](c Coroutine[T, TNext, TReturn], f CoroutineFunc[T, TNext, R]) (R, error) {
+	return Await(c, Spawn(c, f))
+}
+
 /////////////////////////////////////////////////////////////////////
 // Coroutine
 /////////////////////////////////////////////////////////////////////
