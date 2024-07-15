@@ -1,9 +1,6 @@
 package scheduler
 
 import (
-	"sync"
-	"time"
-
 	"github.com/resonatehq/gocoro/pkg/io"
 	"github.com/resonatehq/gocoro/pkg/promise"
 	"github.com/resonatehq/gocoro/pkg/q"
@@ -28,28 +25,22 @@ type Completable interface {
 	Completed() bool
 }
 
-type scheduler[I, O any] struct {
-	lock sync.Mutex
-
-	batchSize int
-
+type Scheduler[I, O any] struct {
 	io io.IO[I, O]
 	in chan Coroutine[I, O]
-
-	done chan interface{}
 
 	runnable q.Queue[Coroutine[I, O]]
 	awaiting q.Queue[*awaitingCoroutine[I, O]]
 
+	closed bool
+
 	// add the history
 }
 
-func New[I, O any](io io.IO[I, O], size int, batchSize int) *scheduler[I, O] {
-	return &scheduler[I, O]{
-		io:        io,
-		in:        make(chan Coroutine[I, O], size),
-		done:      make(chan interface{}),
-		batchSize: batchSize,
+func New[I, O any](io io.IO[I, O], size int) *Scheduler[I, O] {
+	return &Scheduler[I, O]{
+		io: io,
+		in: make(chan Coroutine[I, O], size),
 	}
 }
 
@@ -58,86 +49,27 @@ type awaitingCoroutine[I, O any] struct {
 	on        Completable
 }
 
-func (s *scheduler[I, O]) Add(c Coroutine[I, O]) {
-	s.in <- c
-}
+func (s *Scheduler[I, O]) Add(c Coroutine[I, O]) bool {
+	if s.closed {
+		return false
+	}
 
-func (s *scheduler[I, O]) Run() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.run(false)
-}
-
-func (s *scheduler[I, O]) RunUntilComplete() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.run(true)
-}
-
-func (s *scheduler[I, O]) RunUntilBlocked() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.runUntilBlocked(time.Now().UnixMilli(), nil, nil)
-}
-
-func (s *scheduler[I, O]) Shutdown() {
-	close(s.done)
-}
-
-func (s *scheduler[I, O]) Done() bool {
-	// TODO: implement a graceful shutdown
 	select {
-	case <-s.done:
+	case s.in <- c:
 		return true
 	default:
 		return false
 	}
 }
 
-func (s *scheduler[I, O]) run(breakOnComplete bool) {
-	for {
-		select {
-		case crt := <-s.in:
-			s.runUntilBlocked(time.Now().UnixMilli(), crt, nil)
-		case cqe := <-s.io.Dequeue():
-			s.runUntilBlocked(time.Now().UnixMilli(), nil, cqe)
-		case <-s.done:
-			return
-		}
-
-		assert(len(s.runnable) == 0, "runnable should be empty")
-
-		if breakOnComplete && len(s.awaiting) == 0 {
-			break
-		}
-	}
-}
-
-func (s *scheduler[I, O]) runUntilBlocked(time int64, crt Coroutine[I, O], cqe *io.CQE[O]) {
-	assert(crt == nil || cqe == nil, "one or both of crt/cqe should be nil")
-
-	if crt != nil {
-		s.runnable.Enqueue(crt)
-	}
-
-	if cqe != nil {
-		assert(cqe.Callback != nil, "callback should not be nil")
-		cqe.Callback(cqe.Value, cqe.Error)
-	}
-
-	// exhaust in
-	batch(s.in, s.batchSize, func(crt Coroutine[I, O]) {
-		s.runnable.Enqueue(crt)
+func (s *Scheduler[I, O]) RunUntilBlocked(time int64, cqes []io.QE) {
+	batch(s.in, len(s.in), func(c Coroutine[I, O]) {
+		s.runnable.Enqueue(c)
 	})
 
-	// exhaust cq
-	batch(s.io.Dequeue(), s.batchSize, func(cqe *io.CQE[O]) {
-		assert(cqe.Callback != nil, "callback should not be nil")
-		cqe.Callback(cqe.Value, cqe.Error)
-	})
+	for _, cqe := range cqes {
+		cqe.Invoke()
+	}
 
 	// tick
 	s.Tick(time)
@@ -145,7 +77,7 @@ func (s *scheduler[I, O]) runUntilBlocked(time int64, crt Coroutine[I, O], cqe *
 	assert(len(s.runnable) == 0, "runnable should be empty")
 }
 
-func (s *scheduler[I, O]) Tick(time int64) {
+func (s *Scheduler[I, O]) Tick(time int64) {
 	// move unblocked coroutines from awaiting to runnable
 	s.unblock()
 
@@ -157,7 +89,7 @@ func (s *scheduler[I, O]) Tick(time int64) {
 	}
 }
 
-func (s *scheduler[I, O]) Step(time int64) bool {
+func (s *Scheduler[I, O]) Step(time int64) bool {
 	coroutine, ok := s.runnable.Dequeue()
 	if !ok {
 		return false
@@ -166,13 +98,12 @@ func (s *scheduler[I, O]) Step(time int64) bool {
 	// set the time
 	coroutine.SetTime(time)
 
+	// resume the coroutine
 	value, promise, spawn, await, done := coroutine.Resume()
 
 	if promise != nil {
-		s.io.Enqueue(&io.SQE[I, O]{
-			Value:    value,
-			Callback: promise.Complete,
-		})
+		// enqueue sqe
+		s.io.Enqueue(value, promise.Complete)
 
 		// put on runnable
 		s.runnable.Enqueue(coroutine)
@@ -198,7 +129,16 @@ func (s *scheduler[I, O]) Step(time int64) bool {
 	return true
 }
 
-func (s *scheduler[I, O]) unblock() {
+func (s *Scheduler[I, O]) Size() int {
+	return len(s.runnable) + len(s.awaiting) + len(s.in)
+}
+
+func (s *Scheduler[I, O]) Shutdown() {
+	s.closed = true
+	close(s.in)
+}
+
+func (s *Scheduler[I, O]) unblock() {
 	i := 0
 	for _, coroutine := range s.awaiting {
 		if coroutine.on.Completed() {
@@ -225,7 +165,10 @@ func assert(cond bool, mesg string) {
 func batch[T any](c <-chan T, n int, f func(T)) {
 	for i := 0; i < n; i++ {
 		select {
-		case e := <-c:
+		case e, ok := <-c:
+			if !ok {
+				return
+			}
 			f(e)
 		default:
 			return

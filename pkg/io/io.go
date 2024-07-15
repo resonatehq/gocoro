@@ -5,18 +5,9 @@ package io
 /////////////////////////////////////////////////////////////////////
 
 type IO[I, O any] interface {
-	Enqueue(*SQE[I, O])
-	Dequeue() <-chan *CQE[O]
-	Shutdown()
+	Enqueue(I, func(O, error))
 }
 
-type SQE[I, O any] struct {
-	Value    I
-	Callback func(O, error)
-}
-
-type CQE[O any] struct {
-	Value    O
-	Error    error
-	Callback func(O, error)
+type QE interface {
+	Invoke()
 }

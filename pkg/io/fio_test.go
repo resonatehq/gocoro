@@ -28,12 +28,16 @@ func TestFIO(t *testing.T) {
 	names := []string{"A", "B", "C", "D"}
 	expectedGreetings := []string{"Hello A", "Hello B", "Hello C", "Hello D"}
 
-	for i, name := range names {
-		fio.Enqueue(&SQE[func() (string, error), string]{greet(name), callbackThatAsserts(t, expectedGreetings[i])})
+	for i := 0; i < len(names); i++ {
+		fio.Enqueue(greet(names[i]), callbackThatAsserts(t, expectedGreetings[i]))
 	}
 
-	for range names {
-		cqe := <-fio.Dequeue()
-		cqe.Callback(cqe.Value, nil)
+	n := 0
+	for n < len(names) {
+		cqes := fio.Dequeue(1)
+		if len(cqes) > 0 {
+			cqes[0].callback(cqes[0].value, cqes[0].error)
+			n++
+		}
 	}
 }

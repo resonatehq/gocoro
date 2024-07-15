@@ -35,19 +35,25 @@ func coroutine(n int) gocoro.CoroutineFunc[func() (string, error), string, strin
 
 func main() {
 	// instantiate io
-	io := io.NewFIO[string](100)
+	fio := io.NewFIO[string](100)
 
 	// start io worker on a goroutine
-	go io.Worker()
+	go fio.Worker()
 
 	// instantiate scheduler
-	scheduler := gocoro.New(io, 100, 100)
+	scheduler := gocoro.New(fio, 100)
 
 	// add coroutine to scheduler
-	promise := gocoro.Add(scheduler, coroutine(3))
+	promise, _ := gocoro.Add(scheduler, coroutine(3))
 
-	// run scheduler until complete
-	scheduler.RunUntilComplete()
+	// run scheduler until blocked repeatedly
+	for scheduler.Size() > 0 {
+		cqes := []io.QE{}
+		for _, cqe := range fio.Dequeue(3) {
+			cqes = append(cqes, cqe)
+		}
+		scheduler.RunUntilBlocked(0, cqes)
+	}
 
 	// shutdown scheduler
 	scheduler.Shutdown()

@@ -13,32 +13,28 @@ import (
 // TODO: add comment about generic type stuff
 
 type Scheduler[I, O any] interface {
-	Add(scheduler.Coroutine[I, O])
+	Add(scheduler.Coroutine[I, O]) bool
 
-	Run()
-	RunUntilComplete()
-	RunUntilBlocked()
+	RunUntilBlocked(int64, []io.QE)
 	Shutdown()
-	Done() bool
+	Size() int
 
 	// lower level apis
 	Tick(int64)
 	Step(int64) bool
 }
 
-func New[I, O any](io io.IO[I, O], size int, batchSize int) Scheduler[I, O] {
-	return scheduler.New(io, size, batchSize)
+func New[I, O any](io io.IO[I, O], size int) Scheduler[I, O] {
+	return scheduler.New(io, size)
 }
 
-func NewDST[I, O any](io io.IO[I, O], batchSize int) Scheduler[I, O] {
-	return scheduler.NewDST(io, batchSize)
-}
-
-func Add[T, TNext, TReturn any](s Scheduler[T, TNext], f CoroutineFunc[T, TNext, TReturn]) promise.Promise[TReturn] {
+func Add[T, TNext, TReturn any](s Scheduler[T, TNext], f CoroutineFunc[T, TNext, TReturn]) (promise.Promise[TReturn], bool) {
 	coroutine := newCoroutine(f)
-	s.Add(coroutine)
+	if ok := s.Add(coroutine); !ok {
+		return nil, false
+	}
 
-	return coroutine.p
+	return coroutine.p, true
 }
 
 func Yield[T, TNext, TReturn any](c Coroutine[T, TNext, TReturn], v T) promise.Awaitable[TNext] {
