@@ -3,18 +3,14 @@ package io
 // SQE / CQE
 
 type sqe[I func() (O, error), O any] struct {
-	value    I
-	callback func(O, error)
+	Value    I
+	Callback func(O, error)
 }
 
 type cqe[O any] struct {
-	value    O
-	error    error
-	callback func(O, error)
-}
-
-func (cqe *cqe[O]) Invoke() {
-	cqe.callback(cqe.value, cqe.error)
+	Value    O
+	Error    error
+	Callback func(O, error)
 }
 
 // FIO
@@ -33,11 +29,15 @@ func NewFIO[O any](size int) *FIO[func() (O, error), O] {
 	return fio
 }
 
-func (fio *FIO[I, O]) Enqueue(value I, callback func(O, error)) {
+func (fio *FIO[I, O]) Dispatch(value I, callback func(O, error)) {
 	fio.sq <- &sqe[I, O]{
-		value:    value,
-		callback: callback,
+		Value:    value,
+		Callback: callback,
 	}
+}
+
+func (fio *FIO[I, O]) Enqueue(cqe *cqe[O]) {
+	fio.cq <- cqe
 }
 
 func (fio *FIO[I, O]) Dequeue(n int) []*cqe[O] {
@@ -64,11 +64,11 @@ func (fio *FIO[I, O]) Shutdown() {
 
 func (fio *FIO[I, O]) Worker() {
 	for sqe := range fio.sq {
-		v, e := sqe.value()
-		fio.cq <- &cqe[O]{
-			value:    v,
-			error:    e,
-			callback: sqe.callback,
-		}
+		v, e := sqe.Value()
+		fio.Enqueue(&cqe[O]{
+			Value:    v,
+			Error:    e,
+			Callback: sqe.Callback,
+		})
 	}
 }

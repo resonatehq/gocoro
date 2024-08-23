@@ -29,14 +29,14 @@ func TestFIO(t *testing.T) {
 	expectedGreetings := []string{"Hello A", "Hello B", "Hello C", "Hello D"}
 
 	for i := 0; i < len(names); i++ {
-		fio.Enqueue(greet(names[i]), callbackThatAsserts(t, expectedGreetings[i]))
+		fio.Dispatch(greet(names[i]), callbackThatAsserts(t, expectedGreetings[i]))
 	}
 
 	n := 0
 	for n < len(names) {
 		cqes := fio.Dequeue(1)
 		if len(cqes) > 0 {
-			cqes[0].callback(cqes[0].value, cqes[0].error)
+			cqes[0].Callback(cqes[0].Value, cqes[0].Error)
 			n++
 		}
 	}

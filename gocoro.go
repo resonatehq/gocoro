@@ -15,7 +15,7 @@ import (
 type Scheduler[I, O any] interface {
 	Add(scheduler.Coroutine[I, O]) bool
 
-	RunUntilBlocked(int64, []io.QE)
+	RunUntilBlocked(int64)
 	Shutdown()
 	Size() int
 

@@ -48,11 +48,10 @@ func main() {
 
 	// run scheduler until blocked repeatedly
 	for scheduler.Size() > 0 {
-		cqes := []io.QE{}
 		for _, cqe := range fio.Dequeue(3) {
-			cqes = append(cqes, cqe)
+			cqe.Callback(cqe.Value, cqe.Error)
 		}
-		scheduler.RunUntilBlocked(0, cqes)
+		scheduler.RunUntilBlocked(0)
 	}
 
 	// shutdown scheduler
