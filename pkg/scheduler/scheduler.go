@@ -62,14 +62,10 @@ func (s *Scheduler[I, O]) Add(c Coroutine[I, O]) bool {
 	}
 }
 
-func (s *Scheduler[I, O]) RunUntilBlocked(time int64, cqes []io.QE) {
+func (s *Scheduler[I, O]) RunUntilBlocked(time int64) {
 	batch(s.in, len(s.in), func(c Coroutine[I, O]) {
 		s.runnable.Enqueue(c)
 	})
-
-	for _, cqe := range cqes {
-		cqe.Invoke()
-	}
 
 	// tick
 	s.Tick(time)
@@ -102,8 +98,8 @@ func (s *Scheduler[I, O]) Step(time int64) bool {
 	value, promise, spawn, await, done := coroutine.Resume()
 
 	if promise != nil {
-		// enqueue sqe
-		s.io.Enqueue(value, promise.Complete)
+		// dispatch sqe
+		s.io.Dispatch(value, promise.Complete)
 
 		// put on runnable
 		s.runnable.Enqueue(coroutine)

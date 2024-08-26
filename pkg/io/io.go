@@ -5,9 +5,5 @@ package io
 /////////////////////////////////////////////////////////////////////
 
 type IO[I, O any] interface {
-	Enqueue(I, func(O, error))
-}
-
-type QE interface {
-	Invoke()
+	Dispatch(I, func(O, error))
 }
