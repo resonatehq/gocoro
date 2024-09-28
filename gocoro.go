@@ -29,7 +29,7 @@ func New[I, O any](io io.IO[I, O], size int) Scheduler[I, O] {
 }
 
 func Add[T, TNext, TReturn any](s Scheduler[T, TNext], f CoroutineFunc[T, TNext, TReturn]) (promise.Promise[TReturn], bool) {
-	coroutine := newCoroutine(f)
+	coroutine := newCoroutine(f, map[string]any{})
 	if ok := s.Add(coroutine); !ok {
 		return nil, false
 	}
@@ -45,7 +45,7 @@ func Yield[T, TNext, TReturn any](c Coroutine[T, TNext, TReturn], v T) promise.A
 }
 
 func Spawn[T, TNext, TReturn, R any](c Coroutine[T, TNext, TReturn], f CoroutineFunc[T, TNext, R]) promise.Awaitable[R] {
-	coroutine := newCoroutine(f)
+	coroutine := newCoroutine(f, c.resources())
 	c.yieldAndAwait(&yield[T, TNext, TReturn]{spawn: coroutine, done: false})
 
 	return coroutine.p
@@ -75,6 +75,9 @@ func SpawnAndAwait[T, TNext, TReturn, R any](c Coroutine[T, TNext, TReturn], f C
 
 type Coroutine[T, TNext, TReturn any] interface {
 	Time() int64
+	Set(string, any)
+	Get(string) any
+	resources() map[string]any
 	yieldAndAwait(*yield[T, TNext, TReturn])
 }
 
@@ -82,6 +85,7 @@ type CoroutineFunc[T, TNext, TReturn any] func(Coroutine[T, TNext, TReturn]) (TR
 
 type coroutine[T, TNext, TReturn any] struct {
 	f CoroutineFunc[T, TNext, TReturn]
+	r map[string]interface{}
 	p scheduler.Promise[TReturn]
 	t int64
 
@@ -97,9 +101,10 @@ type yield[T, TNext, TReturn any] struct {
 	done    bool
 }
 
-func newCoroutine[T, TNext, TReturn any](f CoroutineFunc[T, TNext, TReturn]) *coroutine[T, TNext, TReturn] {
+func newCoroutine[T, TNext, TReturn any](f CoroutineFunc[T, TNext, TReturn], r map[string]any) *coroutine[T, TNext, TReturn] {
 	c := &coroutine[T, TNext, TReturn]{
 		f:   f,
+		r:   r,
 		p:   promise.New[TReturn](),
 		c_i: make(chan interface{}),
 		c_o: make(chan *yield[T, TNext, TReturn]),
@@ -132,6 +137,19 @@ func (c *coroutine[T, TNext, TReturn]) SetTime(t int64) {
 
 func (c *coroutine[T, TNext, TReturn]) Time() int64 {
 	return c.t
+}
+
+func (c *coroutine[T, TNext, TReturn]) Set(k string, v any) {
+	c.r[k] = v
+}
+
+func (c *coroutine[T, TNext, TReturn]) Get(k string) any {
+	return c.r[k]
+}
+
+// nolint:unused
+func (c *coroutine[T, TNext, TReturn]) resources() map[string]any {
+	return c.r
 }
 
 // nolint:unused
